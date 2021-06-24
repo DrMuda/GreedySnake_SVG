@@ -2,15 +2,22 @@ import { Component } from 'react'
 
 let timer = null
 const fps = 60
-let speed = 40
+let speed = 40 // 蛇当前移动速度，单位像素/秒
+const slowSpeed = 40 // 正常移动速度
+const dejavuSpeed = slowSpeed * 2 // 加速时的速度, 速度倍数如果是非整数， 加减速时有可能会发生抖动， 
+// 因为非整数时，无法完全均匀补充或删减轨迹点， 待完善
 const bodyR = 20
-const spacing = 25
+const spacing = 25 // 每个节点的间距
+const growSpeed = 3 // 成长速度，每多少分数增加一个节点
 const mainWidth = 1024
 const mainHeight = mainWidth * (720 / 1024)
-const createFoodSpeed = 10
+const createFoodSpeed = 10 // 生成食物的速度，单位个/秒
 const foodR = 5
-const foodAmount = 200
+const foodAmount = 200 // 食物上限
+
+let self = null // 用于绑定组件this
 class Index extends Component {
+
     constructor(props) {
         super(props);
         this.state = {
@@ -21,17 +28,11 @@ class Index extends Component {
             pause: true,
             score: 0
         }
-        this.setTurnAngel = this.setTurnAngel.bind(this)
-        this.addNode = this.addNode.bind(this)
-        this.forward = this.forward.bind(this)
-        this.addFood = this.addFood.bind(this)
-        this.onPause = this.onPause.bind(this)
-        this.collisionWallCheck = this.collisionWallCheck.bind(this)
-        this.init = this.init.bind(this)
+        self = this
     }
 
     componentDidMount () {
-        this.init()
+        self.init()
     }
 
     componentWillUnmount () {
@@ -41,14 +42,15 @@ class Index extends Component {
     // 初始化数据
     init () {
         if (timer) clearInterval(timer)
-        this.setState({
+        self.setState({
             snake: [
                 // 头部是最后一个，尾部是第一个
-                { cpx: 200, cpy: 200, r: bodyR, collisionBoxType: "circle", preDistance: spacing, trace: [] },
-                { cpx: 200, cpy: 200, r: bodyR, collisionBoxType: "circle", preDistance: spacing, trace: [] },
-                { cpx: 200, cpy: 200, r: bodyR, collisionBoxType: "circle", preDistance: spacing, trace: [] },
-                { cpx: 200, cpy: 200, r: bodyR, collisionBoxType: "circle", preDistance: spacing, trace: [] },
-                { cpx: 200, cpy: 200, r: bodyR, collisionBoxType: "circle", preDistance: spacing, trace: [] },
+                // cp：centerPoint
+                { cpx: 200, cpy: 200, r: bodyR, collisionBoxType: "circle" },
+                { cpx: 200, cpy: 200, r: bodyR, collisionBoxType: "circle" },
+                { cpx: 200, cpy: 200, r: bodyR, collisionBoxType: "circle" },
+                { cpx: 200, cpy: 200, r: bodyR, collisionBoxType: "circle" },
+                { cpx: 200, cpy: 200, r: bodyR, collisionBoxType: "circle" },
                 { cpx: 200, cpy: 200, r: bodyR, collisionBoxType: "circle" }
             ],
             angle: 0,
@@ -62,12 +64,12 @@ class Index extends Component {
     forward () {
         // 通过promise，等待setState操作完成再进行其余操作，解决出现断尾的情况
         new Promise(resolve => {
-            if (!this.state.pause) {
-                const { trace, snake, angle } = JSON.parse(JSON.stringify({ data: this.state })).data
+            if (!self.state.pause) {
+                const { trace, snake, angle } = JSON.parse(JSON.stringify({ data: self.state })).data
                 let head = snake[snake.length - 1]
                 const { cpx, cpy } = head
                 const distance = speed / (1000 / fps)
-                // 使头部向前移动一帧，并记录到追踪数组
+                // 使头部向前移动一帧
                 if (angle === 0) {
                     head = { cpx: cpx + distance, cpy: cpy }
                 } else if (angle === 90) {
@@ -100,10 +102,10 @@ class Index extends Component {
                     }
                 }
                 // 动态设置追踪数组上限
-                if (nextTrace.length > parseInt((1000 / ((speed / spacing) * fps)) * (snake.length + 1), 10)) {
+                if (nextTrace.length > parseInt((1000 / ((speed / spacing) * fps)) * snake.length, 10)) {
                     nextTrace.pop()
                 }
-                this.setState({
+                self.setState({
                     trace: nextTrace,
                     snake
                 }, () => {
@@ -118,13 +120,13 @@ class Index extends Component {
 
     // 根据鼠标位置设置头部转向角度
     setTurnAngel (e) {
-        if (!this.state.pause) {
+        if (!self.state.pause) {
             const { left, top } = document.getElementById("main").getBoundingClientRect()
             const { scrollLeft, scrollTop } = document.documentElement
             const { pageX, pageY } = e
             const mouseX = pageX - left - scrollLeft
             const mouseY = pageY - top - scrollTop // 鼠标相对于画布左上角的坐标
-            const { snake } = this.state
+            const { snake } = self.state
             let { cpx, cpy } = snake[snake.length - 1]
             cpx = cpx * (mainWidth / 1024)
             cpy = cpy * (mainHeight / 720) // 经过缩放后的真实坐标
@@ -148,7 +150,7 @@ class Index extends Component {
                     angle = 360 - Math.abs((180 / Math.PI) * Math.atan(deltaY / deltaX))
                 }
             }
-            this.setState({
+            self.setState({
                 angle: angle === 360 ? 0 : angle
             })
         } else {
@@ -158,10 +160,10 @@ class Index extends Component {
 
     // 直接复制尾部作为新的节点
     addNode () {
-        if (!this.state.pause) {
-            const { snake } = this.state
-            this.setState({
-                snake: [snake[0], ...this.state.snake]
+        if (!self.state.pause) {
+            const { snake } = self.state
+            self.setState({
+                snake: [snake[0], ...self.state.snake]
             })
         } else {
             if (timer) clearInterval(timer)
@@ -170,12 +172,12 @@ class Index extends Component {
 
     // 生成食物
     addFood () {
-        if (!this.state.pause) {
-            if (this.state.foodList.length < foodAmount) {
+        if (!self.state.pause) {
+            if (self.state.foodList.length < foodAmount) {
                 if (Math.random() < createFoodSpeed / (1000 / fps)) {
                     const newFood = { cpx: Math.random() * (1024 - foodR * 2) + foodR, cpy: Math.random() * (720 - foodR * 2) + foodR, r: foodR, collisionBoxType: "circle" }
-                    this.setState({
-                        foodList: [...this.state.foodList, newFood]
+                    self.setState({
+                        foodList: [...self.state.foodList, newFood]
                     })
                 }
             }
@@ -184,14 +186,17 @@ class Index extends Component {
         }
     }
 
+    // 碰撞箱检测
     collisionBoxCheck (node1, node2) {
-        if (!this.state.pause) {
+        if (!self.state.pause) {
             const collisionBoxType1 = node1.collisionBoxType
+            // 目前只有圆形碰撞箱，保留方形碰撞箱的可能
             switch (collisionBoxType1) {
                 case "circle": {
                     const collisionBoxType2 = node2.collisionBoxType
                     switch (collisionBoxType2) {
                         case "circle": {
+                            // 如果都是圆形，直接计算两者距离是否小于半径之和
                             const cpx1 = node1.cpx
                             const cpy1 = node1.cpy
                             const r1 = node1.r
@@ -225,7 +230,7 @@ class Index extends Component {
 
     // 撞墙检测
     collisionWallCheck (node) {
-        if (!this.state.pause) {
+        if (!self.state.pause) {
             const { collisionBoxType } = node
             switch (collisionBoxType) {
                 case "circle": {
@@ -244,44 +249,108 @@ class Index extends Component {
         }
     }
 
+    // 运行流程
+    async workflow () {
+        await self.forward()
+        self.addFood()
+        let { snake, foodList, score } = self.state
+        const head = snake[snake.length - 1]
+        if (self.collisionWallCheck(head)) {
+            self.init()
+            return null
+        }
+        const nextFoodList = []
+        foodList.forEach((food) => {
+            if (self.collisionBoxCheck(head, food)) {
+                score += 1
+                if (score % growSpeed === 0) {
+                    self.addNode()
+                }
+            } else {
+                nextFoodList.push(food)
+            }
+        })
+        self.setState({
+            score,
+            foodList: nextFoodList
+        })
+    }
+
     // 当触发暂停时，根据当前暂停状态暂停游戏或恢复游戏
     onPause () {
-        if (this.state.pause) {
-            timer = setInterval(async () => {
-                await this.forward()
-                this.addFood()
-                let { snake, foodList, score } = this.state
-                const head = snake[snake.length - 1]
-                if (this.collisionWallCheck(head)) {
-                    this.init()
-                    return null
-                }
-                const nextFoodList = []
-                foodList.forEach((food) => {
-                    if (this.collisionBoxCheck(head, food)) {
-                        score += 1
-                        if (score % 5 === 0) {
-                            this.addNode()
-                        }
-                    } else {
-                        nextFoodList.push(food)
-                    }
-                })
-                this.setState({
-                    score,
-                    foodList: nextFoodList
-                })
-            }, 1000 / fps)
-            this.setState({
+        if (self.state.pause) {
+            timer = setInterval(self.workflow, 1000 / fps)
+            self.setState({
                 pause: false
             })
         } else {
             if (timer) clearInterval(timer)
-            this.setState({
+            self.setState({
                 pause: true
             })
-            console.log(this.state)
+            console.log(self.state)
         }
+    }
+
+    async onSpeedDown (nextSpeed) {
+        return new Promise(resolve => {
+            if (nextSpeed < speed) {
+                console.log("SpeedDown")
+                const scale = speed / nextSpeed
+                const a = (scale - 1) * 10
+                const b = 10 / a
+                const c = b > 1 ? b - parseInt(b, 10) : 1 - b
+                let no = 1
+                const nextTrace = []
+                // 补充轨迹点方法是，每多少个原始轨迹点后面补充多少个轨迹点， no记录每多少个轨迹点
+                self.state.trace.forEach((t, index) => {
+                    const random = Math.random()
+                    if (no >= parseInt(b, 10)) {
+                        const t2 = self.state.trace[index + 1] || t
+                        const deltaX = t.cpx - t2.cpx // 计算两点的差值， 再根据需要添加的个数均分， 再计算到新增的轨迹点
+                        const deltaY = t.cpy - t2.cpy
+                        nextTrace.push(t)
+                        let addNodeAmount = parseInt(scale - 1, 10) || 1 // 减速倍率[1,2)增加一个， 减速倍率[2,无穷)增加parseInt(scale - 1)个
+                        if (c > random) {
+                            addNodeAmount += 1 // 根据倍率的小数部分概率再加一个
+                        }
+                        for (let i = 0; i < addNodeAmount; i += 1) {
+                            nextTrace.push({
+                                cpx: t.cpx - deltaX / (addNodeAmount + 1) * (i + 1), // 新增多少个，则需要均分+1份
+                                cpy: t.cpy - deltaY / (addNodeAmount + 1) * (i + 1)
+                            })
+                        }
+                        no = 1
+                    } else {
+                        nextTrace.push(t)
+                        no += 1
+                    }
+                })
+                self.setState({
+                    trace: nextTrace
+                }, () => { resolve() })
+            } else { resolve() }
+        })
+    }
+
+    async onSpeedUp (nextSpeed) {
+        return new Promise(resolve => {
+            if (nextSpeed > speed) {
+                console.log("SpeedUp")
+                const scale = nextSpeed / speed
+                let no = 0
+                const nextTrace = []
+                for (let i = 0; i < self.state.trace.length; i += 1) {
+                    if (i >= scale * no) {
+                        nextTrace.push(self.state.trace[i])
+                        no += 1
+                    }
+                }
+                self.setState({
+                    trace: nextTrace
+                }, () => { resolve() })
+            } else { resolve() }
+        })
     }
 
     render () {
@@ -290,21 +359,27 @@ class Index extends Component {
             style={{
                 border: "1px solid #000",
                 width: mainWidth, height: mainHeight,
-                boxSizing: 'content-box'
+                boxSizing: 'content-box',
+                margin: "20px"
             }}
             tabIndex={0}// 使该div可被聚焦，<del>才能用键盘事件</del>
-            // onKeyDown={(e) => {
-            //     if (e.key === "s") {
-            //         speed = 60
-            //     }
-            // }}
-            // onKeyUp={(e) => {
-            //     if (e.key === "s") {
-            //         speed = 40
-            //     }
-            // }}
-            onClick={this.onPause}
-            onMouseMove={this.setTurnAngel}
+            onKeyPress={async (e) => {
+                if (e.key === "s") {
+                    if (speed === dejavuSpeed) {
+                        self.onPause()
+                        await self.onSpeedDown(slowSpeed)
+                        speed = slowSpeed
+                        self.onPause()
+                    } else {
+                        self.onPause()
+                        await self.onSpeedUp(dejavuSpeed)
+                        speed = dejavuSpeed
+                        self.onPause()
+                    }
+                }
+            }}
+            onClick={self.onPause}
+            onMouseMove={self.setTurnAngel}
         >
             <svg viewBox="0 0 1024 720" width="100%" height="100%">
                 <defs>
@@ -334,7 +409,7 @@ class Index extends Component {
                 </defs>
                 <g>
                     {
-                        this.state.foodList.map((node, index) => {
+                        self.state.foodList.map((node, index) => {
                             const { cpx, cpy } = node
                             return <use href="#food" transform={`translate(${cpx},${cpy})`} key={`food_${index}`} />
                         })
@@ -342,16 +417,16 @@ class Index extends Component {
                 </g>
                 <g>
                     {
-                        this.state.snake.map((node, index) => {
+                        self.state.snake.map((node, index) => {
                             const { cpx, cpy } = node
-                            return index === this.state.snake.length - 1 ?
-                                <use href="#head" transform={`translate(${cpx},${cpy}),rotate(${-this.state.angle})`} key={`head`} /> :
+                            return index === self.state.snake.length - 1 ?
+                                <use href="#head" transform={`translate(${cpx},${cpy}),rotate(${-self.state.angle})`} key={`head`} /> :
                                 <use href="#body" transform={`translate(${cpx},${cpy})`} key={`body_${index}`} />
                         })
                     }
                 </g>
                 {
-                    this.state.pause ? <use href="#tips" /> : null
+                    self.state.pause ? <use href="#tips" /> : null
                 }
             </svg>
         </div >

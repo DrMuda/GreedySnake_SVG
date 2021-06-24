@@ -1,5 +1,5 @@
 {
-    "name": "snake_svg",
+    "name": "greedy_snake_svg",
     "version": "0.1.0",
     "private": true,
     "dependencies": {
